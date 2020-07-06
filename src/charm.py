@@ -67,10 +67,16 @@ class TestingProviderRelation(Object):
         logger.debug("################ LOGGING RELATION CREATED ####################")
         logger.debug(f"NODE_INFO: {self.charm.state.node_info}")
 
-        event.relation.data[self.model.unit]['hostname'] = self.hostname
-        event.relation.data[self.model.unit]['inventory'] = self.charm.state.node_info
-        event.relation.data[self.model.unit]['partition'] = "rat"
-        event.relation.data[self.model.unit]['default'] = "False"
+        if self.charm.state.slurm_installed:
+            logger.debug("SLURM INSTALLED SETTING RELATION DATA")
+            event.relation.data[self.model.unit]['hostname'] = self.hostname
+            event.relation.data[self.model.unit]['inventory'] = self.charm.state.node_info
+            event.relation.data[self.model.unit]['partition'] = "rat"
+            event.relation.data[self.model.unit]['default'] = "False"
+        else:
+            logger.debug("SLURM NOT INSTALLED DEFERING SETTING RELATION DATA")
+            event.defer()
+            return
 
 
         #if self.state.slurm_installed:
@@ -124,11 +130,11 @@ class ProviderCharm(CharmBase):
         self.framework.observe(self.on.start, self.on_start)
 
     def on_install(self, event):
-        self.state.slurm_installed = True
+        pass
 
     def on_start(self, event):
-        if self.state.slurm_installed:
-            self.state.node_info = self.get_node_info()
+        self.state.node_info = self.get_node_info()
+        self.state.slurm_installed = True
 
     def get_node_info(self):
         return json.dumps({
