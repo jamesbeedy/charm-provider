@@ -65,7 +65,14 @@ class TestingProviderRelation(Object):
 
     def _on_relation_created(self, event):
         logger.debug("################ LOGGING RELATION CREATED ####################")
-        event.relation.data[self.model.unit]['node_info'] = json.dumps({k:v for k,v in self.charm.state.node_info.items()})
+        logger.debug(f"NODE_INFO: {self.charm.state.node_info}")
+
+        event.relation.data[self.model.unit]['hostname'] = self.hostname
+        event.relation.data[self.model.unit]['inventory'] = self.charm.state.node_info
+        event.relation.data[self.model.unit]['partition'] = "rat"
+        event.relation.data[self.model.unit]['default'] = "False"
+
+
         #if self.state.slurm_installed:
         #    logger.debug("SHARED STATE RECOGNIZED")
         #    logger.debug("SHARED STATE RECOGNIZED")
@@ -78,6 +85,8 @@ class TestingProviderRelation(Object):
 
     def _on_relation_joined(self, event):
         logger.debug("################ LOGGING RELATION JOINED ####################")
+        logger.debug(f"NODE_INFO: {self.charm.state.node_info}")
+
         #logger.debug(self._relation)
         #logger.debug(event.relation.data)
         #logger.debug("################ LOGGING EVENT DATA in RELATION JOINED ####################")
@@ -88,6 +97,7 @@ class TestingProviderRelation(Object):
         #logger.debug(self._relation.data)
 
     def _on_relation_changed(self, event):
+        logger.debug(f"NODE_INFO: {self.charm.state.node_info}")
         logger.debug("################ LOGGING RELATION CHANGED ####################")
         
     def _on_relation_departed(self, event):
@@ -106,7 +116,7 @@ class ProviderCharm(CharmBase):
         self.hostname = socket.gethostname()
 
         self.state.set_default(slurm_installed=False)
-        self.state.set_default(node_info=dict())
+        self.state.set_default(node_info=str())
         
         self.slurmd_provider = TestingProviderRelation(self, "slurmd")
         
@@ -121,22 +131,17 @@ class ProviderCharm(CharmBase):
             self.state.node_info = self.get_node_info()
 
     def get_node_info(self):
-        return {
-            'inventory': {
-                'NodeName': self.hostname,
-                'CPUs': '4',
-                'Boards': '1',
-                'SocketsPerBoard': '1',
-                'CoresPerSocket': '4',
-                'ThreadsPerCore': '1',
-                'RealMemory': '7852',
-                'UpTime': '0-08:49:20',
-                'gpus': 0,
-            },
-            'hostname': self.hostname,
-            'ingress_address': "127.6.6.6",
-            'partition': "debug",
-        }
+        return json.dumps({
+            'NodeName': self.hostname,
+            'CPUs': '4',
+            'Boards': '1',
+            'SocketsPerBoard': '1',
+            'CoresPerSocket': '4',
+            'ThreadsPerCore': '1',
+            'RealMemory': '7852',
+            'UpTime': '0-08:49:20',
+            'gpus': 0,
+        })
 
 
 if __name__ == "__main__":
