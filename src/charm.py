@@ -9,6 +9,8 @@ import socket
 import json
 
 from ops.framework import (
+    EventBase,
+    EventSource,
     Object,
     ObjectEvents,
     StoredState,
@@ -18,19 +20,31 @@ from ops.framework import (
 logger = logging.getLogger()
 
 
-class ProviderRelationEvents(ObjectEvents):
-    """Provider Relation Events"""
+class RenderConfigAndRestartEvent(EventBase):
+    pass
 
 
-class TestingProviderRelation(Object):
+class SlurmClusterRequiresRelationEvents(ObjectEvents):
+    """SlurmCluster Relation Events"""
+    render_config_and_restart = EventSource(
+        RenderConfigAndRestartEvent
+    )
 
-    on = ProviderRelationEvents()
+
+class SlurmClusterRequiresRelation(Object):
+
+    on = SlurmClusterRequiresRelationEvents()
+    
+    _state = StoredState()
 
     def __init__(self, charm, relation_name):
         super().__init__(charm, relation_name)
         self.charm = charm
         self._relation_name = relation_name
         self.hostname = socket.gethostname()
+
+        self.state.set_default(controller_config_acquired=False)
+        self.state.set_default(controller_config=dict())
 
         self.framework.observe(
             self.charm.on[self._relation_name].relation_created,
@@ -57,6 +71,14 @@ class TestingProviderRelation(Object):
             self._on_relation_broken
         )
 
+    @property
+    def controller_config_acquired(self):
+        return self._state.controller_config_acquired
+
+    @property
+    def controller_config(self):
+        return self._state.controller_config
+
     def _on_relation_created(self, event):
         logger.debug("################ LOGGING RELATION CREATED ####################")
 
@@ -66,7 +88,7 @@ class TestingProviderRelation(Object):
             event.relation.data[self.model.unit]['hostname'] = \
                 self.charm.hostname
             event.relation.data[self.model.unit]['inventory'] = \
-                self.charm.state.node_info
+                self.charm.slurm_ops_manager.inventory
             event.relation.data[self.model.unit]['partition'] = \
                 self.charm.config['partition']
             event.relation.data[self.model.unit]['default'] = \
@@ -82,7 +104,14 @@ class TestingProviderRelation(Object):
 
     def _on_relation_changed(self, event):
         logger.debug("################ LOGGING RELATION CHANGED ####################")
-        
+
+        controller_config = event.relation.data[event.app].get('controller_config')
+        if controller_config:
+            # Turn this into something that can be event emmited
+            # transformation of controller config into an event object
+            #self._state.controller_config_acquired = True
+            #self.charm.slurm_ops_manager.on.reconfigure_and_restart.emit(controller_config.event_object)
+    
     def _on_relation_departed(self, event):
         logger.debug("################ LOGGING RELATION DEPARTED ####################")
 
@@ -90,7 +119,7 @@ class TestingProviderRelation(Object):
         logger.debug("################ LOGGING RELATION BROKEN ####################")
 
 
-class ProviderCharm(CharmBase):
+class SlurmdCharm(CharmBase):
 
     state = StoredState()
 
@@ -99,33 +128,31 @@ class ProviderCharm(CharmBase):
 
         self.config = self.model.config
         self.hostname = socket.gethostname()
-        self.state.set_default(node_info={})
-        self.state.set_default(slurm_installed=False)
+
+        self.slurm_ops_manager = SlurmOpsManager(self, 'slurmd')
+        self.slurm_cluster = SlurmClusterRequiresRelation(self, "slurm-cluster")
         
-        self.slurmd_provider = TestingProviderRelation(self, "slurmd")
-        
-        self.framework.observe(self.on.install, self.on_install)
-        self.framework.observe(self.on.start, self.on_start)
+        self.framework.observe(self.on.install, self._on_install)
+        self.framework.observe(self.on.start, self._on_start)
 
-    def on_install(self, event):
-        pass
+        self.framework.observe(self.on.start, self._on_start)
 
-    def on_start(self, event):
-        self.state.node_info = self.get_node_info()
 
-    def get_node_info(self):
-        return json.dumps({
-            'NodeName': self.hostname,
-            'CPUs': '4',
-            'Boards': '1',
-            'SocketsPerBoard': '1',
-            'CoresPerSocket': '4',
-            'ThreadsPerCore': '1',
-            'RealMemory': '7852',
-            'UpTime': '0-08:49:20',
-            'gpus': 0,
-        })
+    def _on_install(self, event):
+        self.slurm_ops_manager.prepare_system_for_slurm()
+
+    def _on_start(self, event):
+        if self.slurm_cluster.controller_config_acquired and self.slurm_ops_manager.slurm_installed:
+            self.slurm_ops_manager.on.render_config_and_restart.emit()
+        else:
+            if not self.slurm_cluster.controller_config_acquired:
+                self.unit.status = BlockedStatus("Need relation to slurm controller.")
+            elif not self.slurm_ops_manager.slurm_installed:
+                self.unit.status = WaitingStatus("Waiting on slurm install to complete...")
+            event.defer()
+            return 
+    
 
 
 if __name__ == "__main__":
-    main(ProviderCharm)
+    main(SlurmdCharm)

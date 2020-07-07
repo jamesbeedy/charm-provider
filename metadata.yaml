@@ -1,4 +1,4 @@
-name: provider
+name: slurmd
 summary: Describe your charm here
 maintainers:
     - Jesse <jesse@omnivector.solutions>
@@ -12,6 +12,6 @@ series:
     - focal
 
 
-provides:
-  slurmd:
-    interface: slurmd
+requires:
+  slurm-cluster:
+    interface: slurm-cluster
