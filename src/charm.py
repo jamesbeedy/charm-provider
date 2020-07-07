@@ -59,51 +59,30 @@ class TestingProviderRelation(Object):
             self._on_relation_broken
         )
 
-    @property
-    def _relation(self):
-        return self.framework.model.get_relation(self._relation_name)
-
     def _on_relation_created(self, event):
         logger.debug("################ LOGGING RELATION CREATED ####################")
-        logger.debug(f"NODE_INFO: {self.charm.state.node_info}")
 
+        # 1) Ensure that we have data to access from the charm state object.
+        # 2) Use data from the main charm state to fulfil sending the relation data.
         if self.charm.state.slurm_installed:
-            logger.debug("SLURM INSTALLED SETTING RELATION DATA")
-            event.relation.data[self.model.unit]['hostname'] = self.hostname
-            event.relation.data[self.model.unit]['inventory'] = self.charm.state.node_info
-            event.relation.data[self.model.unit]['partition'] = "rat"
-            event.relation.data[self.model.unit]['default'] = "False"
+            event.relation.data[self.model.unit]['hostname'] = \
+                self.charm.hostname
+            event.relation.data[self.model.unit]['inventory'] = \
+                self.charm.state.node_info
+            event.relation.data[self.model.unit]['partition'] = \
+                self.charm.config['partition']
+            event.relation.data[self.model.unit]['default'] = \
+                self.charm.config['default']
         else:
+            # If we hit this hook before slurm is installed, defer.
             logger.debug("SLURM NOT INSTALLED DEFERING SETTING RELATION DATA")
             event.defer()
             return
 
-
-        #if self.state.slurm_installed:
-        #    logger.debug("SHARED STATE RECOGNIZED")
-        #    logger.debug("SHARED STATE RECOGNIZED")
-        #    logger.debug("SHARED STATE RECOGNIZED")
-
-        #logger.debug(self._relation)
-        #event.relation.data[self.model.unit]['hostname'] = self.hostname
-        #event.relation.data[self.model.app]['hostname'] = self.hostname
-        #logger.debug(self._relation)
-
     def _on_relation_joined(self, event):
         logger.debug("################ LOGGING RELATION JOINED ####################")
-        logger.debug(f"NODE_INFO: {self.charm.state.node_info}")
-
-        #logger.debug(self._relation)
-        #logger.debug(event.relation.data)
-        #logger.debug("################ LOGGING EVENT DATA in RELATION JOINED ####################")
-        #logger.debug(event.relation.data[self.model.app])
-        #logger.debug(event.relation.data[self.model.unit])
-        #logger.debug("################ LOGGING SELF RELATION DATA in RELATION JOINED ####################")
-        #logger.debug(self._relation)
-        #logger.debug(self._relation.data)
 
     def _on_relation_changed(self, event):
-        logger.debug(f"NODE_INFO: {self.charm.state.node_info}")
         logger.debug("################ LOGGING RELATION CHANGED ####################")
         
     def _on_relation_departed(self, event):
@@ -119,10 +98,11 @@ class ProviderCharm(CharmBase):
 
     def __init__(self, *args):
         super().__init__(*args)
-        self.hostname = socket.gethostname()
 
+        self.config = self.model.config
+        self.hostname = socket.gethostname()
+        self.state.set_default(node_info={})
         self.state.set_default(slurm_installed=False)
-        self.state.set_default(node_info=str())
         
         self.slurmd_provider = TestingProviderRelation(self, "slurmd")
         
@@ -134,7 +114,6 @@ class ProviderCharm(CharmBase):
 
     def on_start(self, event):
         self.state.node_info = self.get_node_info()
-        self.state.slurm_installed = True
 
     def get_node_info(self):
         return json.dumps({
