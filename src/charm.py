@@ -29,8 +29,6 @@ class TestingProviderRelation(Object):
     def __init__(self, charm, relation_name):
         super().__init__(charm, relation_name)
         self.charm = charm
-
-
         self._relation_name = relation_name
         self.hostname = socket.gethostname()
 
