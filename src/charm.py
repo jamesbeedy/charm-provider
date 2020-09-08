@@ -81,10 +81,10 @@ class FlaskHttpProviderRelation(Object):
 class FlaskCharm(CharmBase):
 
     def __init__(self, *args):
+        """Observe the events of the http provider interface."""
         super().__init__(*args)
-        self.hostname = socket.gethostname()
-        
-        self.slurmd_provider = FlaskHttpProviderRelation(self, "http")
+
+        self._flask_http = FlaskHttpProviderRelation(self, "http")
         
         self.framework.observe(
             self.on.install,
