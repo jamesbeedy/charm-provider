@@ -18,21 +18,19 @@ from ops.framework import (
 logger = logging.getLogger()
 
 
-class ProviderRelationEvents(ObjectEvents):
-    """Provider Relation Events"""
+class HttpProviderRelationEvents(ObjectEvents):
+    """Http Provider Relation Events."""
 
 
-class TestingProviderRelation(Object):
+class FlaskHttpProviderRelation(Object):
+    """Provide the flask http port and hostname on relation data."""
 
-    on = ProviderRelationEvents()
+    on = HttpProviderRelationEvents()
 
     def __init__(self, charm, relation_name):
         super().__init__(charm, relation_name)
-        self.charm = charm
-
 
         self._relation_name = relation_name
-        self.hostname = socket.gethostname()
 
         self.framework.observe(
             self.on[self._relation_name].relation_created,
@@ -61,6 +59,10 @@ class TestingProviderRelation(Object):
 
     def _on_relation_created(self, event):
         logger.debug("################ LOGGING RELATION CREATED ####################")
+        # Set the application web server listening port and hostname on this unit's
+        # relation data. 
+        event.relation.data[self.model.unit]['port'] = "8080"
+        event.relation.data[self.model.unit]['hostname'] = socket.gethostname()
 
     def _on_relation_joined(self, event):
         logger.debug("################ LOGGING RELATION JOINED ####################")
@@ -76,13 +78,13 @@ class TestingProviderRelation(Object):
 
 
 
-class ProviderCharm(CharmBase):
+class FlaskCharm(CharmBase):
 
     def __init__(self, *args):
         super().__init__(*args)
         self.hostname = socket.gethostname()
         
-        self.slurmd_provider = TestingProviderRelation(self, "slurmd")
+        self.slurmd_provider = FlaskHttpProviderRelation(self, "http")
         
         self.framework.observe(
             self.on.install,
@@ -112,6 +114,15 @@ class ProviderCharm(CharmBase):
     def _on_install(self, event):
         logger.debug("################ LOGGING RELATION INSTALL ####################")
 
+        # Grap the flask-snap resource and install it.
+        resource_path = self.model.resources.fetch('flask-snap')
+        subprocess.call([
+            "snap",
+            "install",
+            str(resource_path),
+            "--dangerous",
+        ])
+
     def _on_start(self, event):
         logger.debug("################ LOGGING RELATION START ####################")
 
@@ -125,4 +136,4 @@ class ProviderCharm(CharmBase):
         logger.debug("################ LOGGING RELATION REMOVE ####################")
 
 if __name__ == "__main__":
-    main(ProviderCharm)
+    main(FlaskCharm)

@@ -1,4 +1,4 @@
-name: provider
+name: flask-app
 summary: Describe your charm here
 maintainers:
     - Jesse <jesse@omnivector.solutions>
@@ -6,12 +6,20 @@ description: |
     A nice long description of what the product does and any
     high level information about how the charm provides the product,
     on which platform, etc.
+
 tags:
-    - slurm
+    - demo
+
 series:
     - focal
 
 
 provides:
-  slurmd:
-    interface: slurmd
+  http:
+    interface: http
+
+resources:
+  flask-snap:
+    type: file
+    filename: flask.snap
+    description: flask.snap
